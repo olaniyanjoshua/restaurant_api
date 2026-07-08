@@ -1,5 +1,11 @@
 FROM richarvey/nginx-php-fpm:3.1.6
 
+# 1. Copy composer files first to install dependencies
+COPY composer.json composer.lock ./
+
+# 2. Install dependencies (This creates the /vendor folder)
+RUN composer install --no-dev --optimize-autoloader
+
 COPY . .
 
 # Image config
@@ -17,9 +23,9 @@ ENV LOG_CHANNEL=stderr
 ENV DB_CONNECTION=pgsql
 
 # Clearing cache, routes and config
-RUN php artisan route:clear
-RUN php artisan config:clear
-RUN php artisan cache:clear
+RUN php artisan route:clear && \
+    php artisan config:clear && \
+    php artisan cache:clear
 
 # Allow composer to run as root inside the container
 ENV COMPOSER_ALLOW_SUPERUSER=1
