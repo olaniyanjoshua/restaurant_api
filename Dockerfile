@@ -7,13 +7,15 @@ COPY . .
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
 # 3. Install dependencies
-# This will now succeed because the 'artisan' file is already in the container
+# This creates the /vendor folder
 RUN composer install --no-dev --optimize-autoloader
 
-# 4. Now clear the cache, routes and config
+# 4. Clear the cache, routes, and config
+# We use DB_CONNECTION=null to prevent Laravel from trying to connect 
+# to the database (SQLite) during the build process.
 RUN php artisan route:clear && \
     php artisan config:clear && \
-    php artisan cache:clear
+    DB_CONNECTION=null php artisan cache:clear
 
 # Image config
 ENV SKIP_COMPOSER=1
