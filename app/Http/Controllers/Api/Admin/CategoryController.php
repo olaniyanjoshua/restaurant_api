@@ -11,7 +11,7 @@ class CategoryController extends Controller
 {
     public function index()
     {
-        return Category::orderBy('sort_order')->get();
+        return Category::withCount('menuItems')->orderBy('sort_order')->get();
     }
 
     public function store(Request $request)

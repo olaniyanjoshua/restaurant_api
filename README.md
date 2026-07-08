@@ -25,11 +25,20 @@ overwriting where needed:
 app/Models/*.php                          -> app/Models/
 app/Http/Controllers/Api/*.php             -> app/Http/Controllers/Api/
 app/Http/Controllers/Api/Admin/*.php       -> app/Http/Controllers/Api/Admin/
+app/Providers/AppServiceProvider.php       -> app/Providers/AppServiceProvider.php
 database/migrations/*.php                  -> database/migrations/
 database/seeders/*.php                     -> database/seeders/
 routes/api.php                             -> routes/api.php
 config/cors.php                            -> config/cors.php
+Dockerfile                                 -> Dockerfile
+.dockerignore                              -> .dockerignore
+conf/nginx/nginx-site.conf                 -> conf/nginx/nginx-site.conf
+scripts/00-laravel-deploy.sh               -> scripts/00-laravel-deploy.sh (keep it executable: chmod +x)
 ```
+
+The `Dockerfile`, `.dockerignore`, `conf/`, and `scripts/` files are only
+needed when you get to deployment (Section 7) — skip them for now if you're
+just running locally.
 
 ## 3. Configure Sanctum
 
@@ -43,19 +52,38 @@ This app uses plain Sanctum **API tokens** (Bearer tokens), not the
 cookie-based SPA flow, so no `SANCTUM_STATEFUL_DOMAINS` setup is required. The
 `auth:sanctum` middleware is already applied to admin routes in `routes/api.php`.
 
-## 4. Configure your `.env` for MySQL
+## 4. Install PostgreSQL locally and configure your `.env`
+
+This project uses **PostgreSQL** (not MySQL) so local development matches
+what you'll deploy to Render.
+
+**Install Postgres:**
+- Windows/Mac: download the installer from https://www.postgresql.org/download/ —
+  it bundles **pgAdmin**, a phpMyAdmin-equivalent GUI for creating databases
+  and browsing tables.
+- During install you'll set a password for the default `postgres` user — remember it.
+
+**Create the database** (via pgAdmin, or the command line):
+```bash
+psql -U postgres -c "CREATE DATABASE gourmet_haven"
+```
+
+**Set your `.env`** (a template is included as `.env.example` — copy it to `.env`
+and fill in your password):
 
 ```
-DB_CONNECTION=mysql
+DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
-DB_PORT=3306
+DB_PORT=5432
 DB_DATABASE=gourmet_haven
-DB_USERNAME=root
-DB_PASSWORD=
+DB_USERNAME=postgres
+DB_PASSWORD=your-postgres-password
 ```
 
-Create the `gourmet_haven` database in MySQL first (e.g. via
-`mysql -u root -e "CREATE DATABASE gourmet_haven"`).
+Then generate your app key if you haven't already:
+```bash
+php artisan key:generate
+```
 
 ## 5. Migrate and seed
 
@@ -63,6 +91,19 @@ Create the `gourmet_haven` database in MySQL first (e.g. via
 php artisan migrate
 php artisan db:seed
 ```
+
+## 5b. Enable serving uploaded images
+
+Menu item photos uploaded from the admin panel are saved to `storage/app/public/menu-items`.
+For them to be reachable over HTTP, Laravel needs its public storage symlink:
+
+```bash
+php artisan storage:link
+```
+
+Run this once. Without it, uploaded images will save fine but return 404 when
+the browser tries to load them.
+
 
 This creates the tables and seeds:
 - The same 10 menu items (across Starters/Mains/Desserts/Drinks) already used
@@ -147,6 +188,64 @@ current menu prices — the client only sends item IDs and quantities.
 | GET | `/api/admin/reservations` | Paginated list, optional `?status=pending` |
 | GET | `/api/admin/reservations/{id}` | Reservation detail |
 | PATCH | `/api/admin/reservations/{id}` | `{ "status": "confirmed" }` |
+
+---
+
+## 7. Deploying to Render (PostgreSQL + Docker)
+
+Render doesn't run PHP natively, so Laravel apps deploy there as a Docker
+container. This project already includes everything needed:
+`Dockerfile`, `.dockerignore`, `conf/nginx/nginx-site.conf`, and
+`scripts/00-laravel-deploy.sh` (this runs automatically on every deploy —
+installs dependencies, caches config/routes, links storage, and runs
+migrations).
+
+**Steps:**
+
+1. Push this project to a GitHub repo (make sure `.env` is in `.gitignore`
+   and is **not** committed).
+
+2. In Render, create a **PostgreSQL** database (New → PostgreSQL). Once it's
+   ready, copy its **Internal Database URL** — you'll need it in step 4.
+
+3. In Render, create a **Web Service** from your repo, and choose **Docker**
+   as the runtime when prompted (Render will detect the `Dockerfile`
+   automatically).
+
+4. Under the service's **Environment** tab, add:
+
+   | Key | Value |
+   |---|---|
+   | `DATABASE_URL` | The Internal Database URL from step 2 |
+   | `DB_CONNECTION` | `pgsql` |
+   | `APP_KEY` | Output of running `php artisan key:generate --show` locally |
+   | `APP_ENV` | `production` |
+   | `APP_DEBUG` | `false` |
+   | `APP_URL` | Your Render service URL, e.g. `https://gourmet-haven-api.onrender.com` |
+
+   Laravel's default `config/database.php` already reads `DATABASE_URL`
+   automatically for the `pgsql` connection — no extra config needed.
+
+5. Deploy. Watch the build logs — `scripts/00-laravel-deploy.sh` runs
+   automatically and will create all your tables via `migrate --force`.
+
+6. **Seed once, manually**, after the first successful deploy — don't leave
+   seeding in the automatic deploy script, or every redeploy would re-run it.
+   Use Render's **Shell** tab on the service to run:
+   ```bash
+   php artisan db:seed --force
+   ```
+
+7. Update your React app's `.env` (or hosting provider's env vars) so
+   `VITE_API_URL` points at `https://your-service.onrender.com/api` instead
+   of `http://127.0.0.1:8000/api`, and add your deployed frontend's URL to
+   `config/cors.php`'s `allowed_origins`.
+
+**Note on uploaded images:** Render's filesystem is ephemeral — anything
+written to disk (including files uploaded via `storage:link`) is wiped on
+every redeploy or restart. For a portfolio/demo this is usually fine, but for
+production you'll eventually want to swap local disk storage for Render's
+persistent Disks or an S3-compatible bucket. Ask if you want help wiring that up.
 
 ---
 
