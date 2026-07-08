@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 // Public: menu browsing
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/menu-items', [MenuItemController::class, 'index']);
-Route::get('/menu-items/{menuItem}', [MenuItemController::class, 'show']);
+Route::get('/menu-items/{menuItem}', [MenuItemController::class, 'show'])->where('menuItem', '[0-9]+');
 
 // Public: place an order / look up an order
 Route::post('/orders', [OrderController::class, 'store']);
