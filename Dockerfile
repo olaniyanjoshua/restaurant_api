@@ -19,4 +19,9 @@ ENV DB_CONNECTION=pgsql
 # Allow composer to run as root inside the container
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
+# Clearing cache, routes and config
+php artisan route:clear
+php artisan config:clear
+php artisan cache:clear
+
 CMD ["/start.sh"]
