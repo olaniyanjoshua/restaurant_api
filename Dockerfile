@@ -15,8 +15,7 @@ RUN composer install --no-dev --optimize-autoloader
 # to the database (SQLite) during the build process.
 RUN php artisan route:clear && \
     php artisan config:clear && \
-    DB_CONNECTION=null php artisan cache:clear
-
+    CACHE_STORE=file php artisan cache:clear
 # Image config
 ENV SKIP_COMPOSER=1
 ENV WEBROOT=/var/www/html/public
